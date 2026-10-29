@@ -1,0 +1,29 @@
+{
+  "name": "coopserve-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PulseOps - Cooperative Digital Service & Operations Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:generate": "turbo run db:generate",
+    "db:seed": "npm run seed --workspace=@coopserve/database",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.4",
+    "typescript": "^5.8.2",
+    "prettier": "^3.5.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.0.0"
+}

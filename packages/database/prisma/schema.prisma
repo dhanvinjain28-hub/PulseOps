@@ -1,0 +1,235 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum BookingStatus {
+  DRAFT
+  REQUESTED
+  ASSIGNED
+  EN_ROUTE
+  ARRIVED
+  IN_PROGRESS
+  QUOTE_PENDING
+  COMPLETED
+  PAYMENT_SETTLED
+  CLOSED
+  CANCELLED_BY_CUSTOMER
+  CANCELLED_BY_WORKER
+  EXPIRED
+}
+
+enum SkillCategory {
+  ELECTRICAL
+  PLUMBING
+  CARPENTRY
+  PAINTING
+  CLEANING
+  CAREGIVING
+  GARDENING
+  APPLIANCE_REPAIR
+  MASONRY
+  GENERAL_MAINTENANCE
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  NET_BANKING
+  WALLET
+  CASH_ON_DELIVERY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  REFUNDED
+  DISPUTED
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+  COD_RECONCILIATION
+  WELFARE_DEDUCTION
+  PAYOUT
+}
+
+enum WelfareFundType {
+  HEALTH_INSURANCE
+  ACCIDENT_INSURANCE
+  PENSION_SAVINGS
+  EMERGENCY_AID
+}
+
+model Federation {
+  id              String     @id @default(uuid())
+  name            String
+  stateCode       String
+  registrationNo  String     @unique
+  configPolicies  Json?
+  societies       Society[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("federations")
+}
+
+model Society {
+  id                  String     @id @default(uuid())
+  federationId        String
+  federation          Federation @relation(fields: [federationId], references: [id], onDelete: Cascade)
+  name                String
+  registrationNo      String     @unique
+  district            String
+  state               String
+  contactPhone        String
+  contactEmail        String?
+  serviceRadiusKm     Float      @default(15.0)
+  centerLat           Float
+  centerLng           Float
+  workers             Worker[]
+  bookings            Booking[]
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@map("societies")
+}
+
+model Customer {
+  id              String     @id @default(uuid())
+  phone           String     @unique
+  fullName        String
+  email           String?    @unique
+  defaultAddress  Json?
+  ratingAverage   Float      @default(5.0)
+  bookings        Booking[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("customers")
+}
+
+model Worker {
+  id                  String               @id @default(uuid())
+  societyId           String
+  society             Society              @relation(fields: [societyId], references: [id], onDelete: Restrict)
+  phone               String               @unique
+  fullName            String
+  kycStatus           KycStatus            @default(PENDING)
+  skills              String[]
+  currentLat          Float?
+  currentLng          Float?
+  isAvailable         Boolean              @default(true)
+  isActive            Boolean              @default(true)
+  walletBalance       Decimal              @default(0.00) @db.Decimal(10, 2)
+  ratingAverage       Float                @default(5.0)
+  totalJobsCompleted  Int                  @default(0)
+  lastAssignedAt      DateTime?
+  bookings            Booking[]
+  walletTransactions  WalletTransaction[]
+  welfareRecords      WelfareLedger[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([societyId])
+  @@index([isAvailable, isActive])
+  @@map("workers")
+}
+
+model Booking {
+  id                  String         @id @default(uuid())
+  bookingNumber       String         @unique
+  customerId          String
+  customer            Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  workerId            String?
+  worker              Worker?        @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  societyId           String?
+  society             Society?       @relation(fields: [societyId], references: [id], onDelete: SetNull)
+  status              BookingStatus  @default(REQUESTED)
+  skillCategory       SkillCategory
+  description         String
+  jobLat              Float
+  jobLng              Float
+  addressText         String
+  startOtp            String
+  endOtp              String
+  baseRate            Decimal        @db.Decimal(10, 2)
+  materialCost        Decimal        @default(0.00) @db.Decimal(10, 2)
+  totalAmount         Decimal        @db.Decimal(10, 2)
+  paymentMethod       PaymentMethod  @default(UPI)
+  scheduledAt         DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  cancellationReason  String?
+  payment             Payment?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([customerId])
+  @@index([workerId])
+  @@index([status])
+  @@map("bookings")
+}
+
+model Payment {
+  id                  String         @id @default(uuid())
+  bookingId           String         @unique
+  booking             Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  paymentMethod       PaymentMethod
+  status              PaymentStatus  @default(PENDING)
+  gatewayRefId        String?
+  totalAmount         Decimal        @db.Decimal(10, 2)
+  workerWage          Decimal        @db.Decimal(10, 2)
+  societyFee          Decimal        @db.Decimal(10, 2)
+  welfareContribution Decimal        @db.Decimal(10, 2)
+  platformFee         Decimal        @db.Decimal(10, 2)
+  materialCost        Decimal        @default(0.00) @db.Decimal(10, 2)
+  paidAt              DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@map("payments")
+}
+
+model WalletTransaction {
+  id            String          @id @default(uuid())
+  workerId      String
+  worker        Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  type          TransactionType
+  amount        Decimal         @db.Decimal(10, 2)
+  balanceAfter  Decimal         @db.Decimal(10, 2)
+  referenceId   String?
+  description   String
+  createdAt     DateTime        @default(now())
+
+  @@index([workerId])
+  @@map("wallet_transactions")
+}
+
+model WelfareLedger {
+  id          String          @id @default(uuid())
+  workerId    String
+  worker      Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  fundType    WelfareFundType
+  amount      Decimal         @db.Decimal(10, 2)
+  bookingId   String?
+  notes       String?
+  createdAt   DateTime        @default(now())
+
+  @@index([workerId])
+  @@map("welfare_ledger")
+}
